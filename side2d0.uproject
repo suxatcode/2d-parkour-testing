@@ -1,0 +1,13 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "4.25",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "side2d0",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
