@@ -6,6 +6,7 @@
 #include "Components/InputComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "DrawDebugHelpers.h"
 
 Aside2d0Character::Aside2d0Character()
 {
@@ -48,6 +49,8 @@ Aside2d0Character::Aside2d0Character()
 //////////////////////////////////////////////////////////////////////////
 // Input
 
+const FName JumpObjectInterference("JumpObjectInterference");
+
 void Aside2d0Character::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
 {
 	UE_LOG(LogTemp, Warning, TEXT("XXX123"));
@@ -58,30 +61,41 @@ void Aside2d0Character::SetupPlayerInputComponent(class UInputComponent* PlayerI
 
 	PlayerInputComponent->BindTouch(IE_Pressed, this, &Aside2d0Character::TouchStarted);
 	PlayerInputComponent->BindTouch(IE_Released, this, &Aside2d0Character::TouchStopped);
+
+	GetWorld()->DebugDrawTraceTag = JumpObjectInterference;
 }
 
 
 void Aside2d0Character::StartJump() {
 	auto v = this->GetCharacterMovement()->GetLastUpdateVelocity();
 	UE_LOG(LogTemp, Warning, TEXT("velocity=%s"), *v.ToString());
-	FHitResult objectInMoveDirection;
-	auto EndSearch = GetActorLocation();
-	float legLength = 500.0f; // very high for testing
-	EndSearch.Y += legLength;
 	auto StartSearch = GetActorLocation();
-	StartSearch.X += 30.0f; // get some offset so we dont hit the character mesh components while sweeping, there must be a better way..
-	StartSearch.Y += 30.0f;
-	StartSearch.Z += 30.0f;
-	GetWorld()->SweepSingleByChannel(
-		objectInMoveDirection, StartSearch, EndSearch, FQuat::Identity, ECollisionChannel::ECC_PhysicsBody, FCollisionShape::MakeSphere(25.0f), FCollisionObjectQueryParams::AllObjects
+	auto EndSearch = GetActorLocation();
+	float legLength = 250.0f; // very high for testing
+	EndSearch.Y += v.Y > 0 ? legLength : -legLength; // search in movement direction
+	float radius = 25.f;
+	//DrawDebugSphere(GetWorld(), StartSearch, radius, 20/*segments*/, FColor(0.f, 255.f, 0.f), false, 3.f);
+	//DrawDebugSphere(GetWorld(), EndSearch,   radius, 20/*segments*/, FColor(0.f, 0.f, 255.f), false, 3.f);
+	FCollisionQueryParams params;
+	params.TraceTag = JumpObjectInterference;
+	params.AddIgnoredActor(this);
+	FHitResult objectInMoveDirection;
+	bool hit = GetWorld()->SweepSingleByChannel(
+		objectInMoveDirection, StartSearch, EndSearch, FQuat::Identity,
+		ECollisionChannel::ECC_WorldStatic, FCollisionShape::MakeSphere(radius),
+		params
 	);
-	UE_LOG(LogTemp, Warning, TEXT("objectInMoveDir=%s"), *objectInMoveDirection.ToString());
-	//auto v2 = AActor::GetActorForwardVector();
-	//UE_LOG(LogTemp, Warning, TEXT("forward=%s"), *v2.ToString());
-	ACharacter::Jump();
+	if (hit && objectInMoveDirection.bBlockingHit) {
+		UE_LOG(LogTemp, Warning, TEXT("objectInMoveDir=%s"), *objectInMoveDirection.ToString());
+		v.Z += 100.f;
+		//this->GetMesh()->AddImpulse(FVector(0.0, 0.0, 20.0));
+		//this->GetCapsuleComponent()->AddImpulse(FVector(0.0, 0.0, 20.0));
+		this->AddMovementInput(FVector(0.0, 0.0, 1.0), 200.f, true);
+	}
+	//ACharacter::Jump();
 }
 void Aside2d0Character::StopJump() {
-	ACharacter::StopJumping();
+	//ACharacter::StopJumping();
 }
 
 void Aside2d0Character::MoveRight(float Value)
