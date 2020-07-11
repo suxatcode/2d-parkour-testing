@@ -47,8 +47,16 @@ public:
 	/** Returns CameraBoom subobject **/
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 
+	/**
+	 * Amount of running speed translated into upward force when running at a
+	 * wall and jumping in front of it.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0", ClampMax="1", UIMax="1"))
 	float WallrunSpeedToUpwardForceTransitionRatio;
+	/**
+	 * Implications:
+	 *  - wallrun: distance from wall at which upward force translation occurs
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0", ClampMax="500", UIMax="500"))
 	float LegLength;
 };
