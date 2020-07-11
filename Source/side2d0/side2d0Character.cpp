@@ -68,11 +68,16 @@ void Aside2d0Character::SetupPlayerInputComponent(class UInputComponent* PlayerI
 
 void Aside2d0Character::StartJump() {
 	auto v = this->GetCharacterMovement()->GetLastUpdateVelocity();
+	if (v.Y == 0) {
+		ACharacter::Jump();
+		return;
+	}
 	UE_LOG(LogTemp, Warning, TEXT("velocity=%s"), *v.ToString());
 	auto StartSearch = GetActorLocation();
 	auto EndSearch = GetActorLocation();
 	float legLength = 250.0f; // very high for testing
-	EndSearch.Y += v.Y > 0 ? legLength : -legLength; // search in movement direction
+	float moveDirectionY = (v.Y / FMath::Abs(v.Y));
+	EndSearch.Y += (moveDirectionY * legLength); // search in movement direction
 	float radius = 25.f;
 	//DrawDebugSphere(GetWorld(), StartSearch, radius, 20/*segments*/, FColor(0.f, 255.f, 0.f), false, 3.f);
 	//DrawDebugSphere(GetWorld(), EndSearch,   radius, 20/*segments*/, FColor(0.f, 0.f, 255.f), false, 3.f);
@@ -85,17 +90,23 @@ void Aside2d0Character::StartJump() {
 		ECollisionChannel::ECC_WorldStatic, FCollisionShape::MakeSphere(radius),
 		params
 	);
+	ACharacter::Jump();
 	if (hit && objectInMoveDirection.bBlockingHit) {
 		UE_LOG(LogTemp, Warning, TEXT("objectInMoveDir=%s"), *objectInMoveDirection.ToString());
 		v.Z += 100.f;
 		//this->GetMesh()->AddImpulse(FVector(0.0, 0.0, 20.0));
 		//this->GetCapsuleComponent()->AddImpulse(FVector(0.0, 0.0, 20.0));
-		this->AddMovementInput(FVector(0.0, 0.0, 1.0), 200.f, true);
+		//this->AddMovementInput(FVector(0.0, 0.0, 1.0), 200.f, true);
+		auto src = GetActorLocation();
+		src.Z -= 80.f;
+		float ForceRadius = 200.f;
+		DrawDebugSphere(GetWorld(), src, ForceRadius, 16, FColor(255.f, 0.f, 0.f), false, 2.f);
+		this->GetCharacterMovement()->AddRadialImpulse(src, ForceRadius, 2000.f, ERadialImpulseFalloff::RIF_Constant, true);
+		this->GetCharacterMovement()->AddRadialForce(src, ForceRadius, 2000.f, ERadialImpulseFalloff::RIF_Constant);
 	}
-	//ACharacter::Jump();
 }
 void Aside2d0Character::StopJump() {
-	//ACharacter::StopJumping();
+	ACharacter::StopJumping();
 }
 
 void Aside2d0Character::MoveRight(float Value)
