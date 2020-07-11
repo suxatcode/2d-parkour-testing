@@ -37,6 +37,8 @@ protected:
 	void StartJump();
 	void StopJump();
 
+	void ApplyWallrunImpulse();
+
 public:
 	Aside2d0Character();
 
@@ -44,4 +46,9 @@ public:
 	FORCEINLINE class UCameraComponent* GetSideViewCameraComponent() const { return SideViewCameraComponent; }
 	/** Returns CameraBoom subobject **/
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0", ClampMax="1", UIMax="1"))
+	float WallrunSpeedToUpwardForceTransitionRatio;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0", ClampMax="500", UIMax="500"))
+	float LegLength;
 };

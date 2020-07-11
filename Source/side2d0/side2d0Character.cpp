@@ -42,6 +42,9 @@ Aside2d0Character::Aside2d0Character()
 	GetCharacterMovement()->MaxWalkSpeed = 600.f;
 	GetCharacterMovement()->MaxFlySpeed = 600.f;
 
+	WallrunSpeedToUpwardForceTransitionRatio = 0.5f;
+	LegLength = 100.f;
+
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named MyCharacter (to avoid direct content references in C++)
 }
@@ -67,20 +70,24 @@ void Aside2d0Character::SetupPlayerInputComponent(class UInputComponent* PlayerI
 
 
 void Aside2d0Character::StartJump() {
+	ApplyWallrunImpulse();
+	ACharacter::Jump();
+}
+void Aside2d0Character::StopJump() {
+	ACharacter::StopJumping();
+}
+
+void Aside2d0Character::ApplyWallrunImpulse() {
 	auto v = this->GetCharacterMovement()->GetLastUpdateVelocity();
 	if (v.Y == 0) {
-		ACharacter::Jump();
 		return;
 	}
 	UE_LOG(LogTemp, Warning, TEXT("velocity=%s"), *v.ToString());
 	auto StartSearch = GetActorLocation();
 	auto EndSearch = GetActorLocation();
-	float legLength = 250.0f; // very high for testing
 	float moveDirectionY = (v.Y / FMath::Abs(v.Y));
-	EndSearch.Y += (moveDirectionY * legLength); // search in movement direction
+	EndSearch.Y += (moveDirectionY * LegLength); // search in movement direction
 	float radius = 25.f;
-	//DrawDebugSphere(GetWorld(), StartSearch, radius, 20/*segments*/, FColor(0.f, 255.f, 0.f), false, 3.f);
-	//DrawDebugSphere(GetWorld(), EndSearch,   radius, 20/*segments*/, FColor(0.f, 0.f, 255.f), false, 3.f);
 	FCollisionQueryParams params;
 	params.TraceTag = JumpObjectInterference;
 	params.AddIgnoredActor(this);
@@ -90,23 +97,16 @@ void Aside2d0Character::StartJump() {
 		ECollisionChannel::ECC_WorldStatic, FCollisionShape::MakeSphere(radius),
 		params
 	);
-	ACharacter::Jump();
 	if (hit && objectInMoveDirection.bBlockingHit) {
-		UE_LOG(LogTemp, Warning, TEXT("objectInMoveDir=%s"), *objectInMoveDirection.ToString());
-		v.Z += 100.f;
-		//this->GetMesh()->AddImpulse(FVector(0.0, 0.0, 20.0));
-		//this->GetCapsuleComponent()->AddImpulse(FVector(0.0, 0.0, 20.0));
-		//this->AddMovementInput(FVector(0.0, 0.0, 1.0), 200.f, true);
+		//UE_LOG(LogTemp, Warning, TEXT("objectInMoveDir=%s"), *objectInMoveDirection.ToString());
 		auto src = GetActorLocation();
 		src.Z -= 80.f;
 		float ForceRadius = 200.f;
+		float WallrunUpForce = 100.f /* leg strength x wall grip */ + WallrunSpeedToUpwardForceTransitionRatio * FMath::Abs(v.Y);
+		UE_LOG(LogTemp, Warning, TEXT("WallrunUpForce=%f (= 100.f + %f * %f)"), WallrunUpForce, WallrunSpeedToUpwardForceTransitionRatio, FMath::Abs(v.Y));
 		DrawDebugSphere(GetWorld(), src, ForceRadius, 16, FColor(255.f, 0.f, 0.f), false, 2.f);
-		this->GetCharacterMovement()->AddRadialImpulse(src, ForceRadius, 2000.f, ERadialImpulseFalloff::RIF_Constant, true);
-		this->GetCharacterMovement()->AddRadialForce(src, ForceRadius, 2000.f, ERadialImpulseFalloff::RIF_Constant);
+		this->GetCharacterMovement()->AddRadialImpulse(src, ForceRadius, WallrunUpForce, ERadialImpulseFalloff::RIF_Constant, true);
 	}
-}
-void Aside2d0Character::StopJump() {
-	ACharacter::StopJumping();
 }
 
 void Aside2d0Character::MoveRight(float Value)
