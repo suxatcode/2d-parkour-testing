@@ -44,6 +44,7 @@ Aside2d0Character::Aside2d0Character()
 
 	WallrunSpeedToUpwardForceTransitionRatio = 0.5f;
 	LegLength = 100.f;
+	TMPRetourUpwardBoost = 20.f;
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named MyCharacter (to avoid direct content references in C++)
@@ -70,16 +71,48 @@ void Aside2d0Character::SetupPlayerInputComponent(class UInputComponent* PlayerI
 
 
 void Aside2d0Character::StartJump() {
-	ApplyWallrunImpulse();
+	auto movementMode = GetCharacterMovement()->MovementMode;
+	ApplyWallrunImpulse(movementMode);
+	ApplyRetourImpulse(movementMode);
 	ACharacter::Jump();
 }
 void Aside2d0Character::StopJump() {
 	ACharacter::StopJumping();
 }
 
-void Aside2d0Character::ApplyWallrunImpulse() {
+void Aside2d0Character::ApplyRetourImpulse(EMovementMode movement) {
+	if (movement != EMovementMode::MOVE_Falling) {
+		return;
+	}
+	auto userDirection = this->LastControlInputVector;
+	auto StartSearch = GetActorLocation();
+	auto EndSearch = GetActorLocation();
+	float behind = -(userDirection.Y / FMath::Abs(userDirection.Y));
+	EndSearch.Y += (behind * LegLength); // search in movement direction
+	float radius = 25.f;
+	FCollisionQueryParams params;
+	params.TraceTag = JumpObjectInterference;
+	params.AddIgnoredActor(this);
+	FHitResult objectInMoveDirection;
+	bool hit = GetWorld()->SweepSingleByChannel(
+		objectInMoveDirection, StartSearch, EndSearch, FQuat::Identity,
+		ECollisionChannel::ECC_WorldStatic, FCollisionShape::MakeSphere(radius),
+		params
+	);
+	if (hit && objectInMoveDirection.bBlockingHit) {
+		auto src = objectInMoveDirection.Location;
+		src.Z -= TMPRetourUpwardBoost;
+		float ForceRadius = 200.f;
+		float pushOffSrcForce = GetCharacterMovement()->JumpZVelocity;
+		DrawDebugSphere(GetWorld(), src, ForceRadius, 16, FColor(255.f, 0.f, 0.f), false, 2.f);
+		this->GetCharacterMovement()->AddRadialImpulse(src, ForceRadius, pushOffSrcForce, ERadialImpulseFalloff::RIF_Linear, true);
+	}
+}
+
+void Aside2d0Character::ApplyWallrunImpulse(EMovementMode movement) {
 	auto v = this->GetCharacterMovement()->GetLastUpdateVelocity();
-	if (v.Y == 0) {
+	if (v.Y == 0 || movement != EMovementMode::MOVE_Walking) {
+		// no horizontal speed || not attached to ground => no wallrun
 		return;
 	}
 	UE_LOG(LogTemp, Warning, TEXT("velocity=%s"), *v.ToString());

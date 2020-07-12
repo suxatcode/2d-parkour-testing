@@ -37,7 +37,8 @@ protected:
 	void StartJump();
 	void StopJump();
 
-	void ApplyWallrunImpulse();
+	void ApplyWallrunImpulse(EMovementMode movement);
+	void ApplyRetourImpulse(EMovementMode movement);
 
 public:
 	Aside2d0Character();
@@ -59,4 +60,7 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0", ClampMax="500", UIMax="500"))
 	float LegLength;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0", ClampMax="20", UIMax="20"))
+	float TMPRetourUpwardBoost;
 };
