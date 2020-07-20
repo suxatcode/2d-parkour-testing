@@ -34,11 +34,16 @@ protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* InputComponent) override;
 	// End of APawn interface
 
+	float GetMass();
+
 	void StartJump();
 	void StopJump();
 
 	void ApplyWallrunImpulse(EMovementMode movement);
 	void ApplyRetourImpulse(EMovementMode movement);
+
+	void Grab();
+	void UnGrab();
 
 public:
 	Aside2d0Character();
@@ -61,6 +66,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0", ClampMax="500", UIMax="500"))
 	float LegLength;
 
+	/**
+	 * More weight => more impact.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="1", UIMin="1", ClampMax="1000", UIMax="1000"))
+	float CharacterWeightKG;
+
+	/**
+	 * Implications:
+	 *  - smaller foots need more precise foot placement on ledges
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="1", UIMin="1", ClampMax="1000", UIMax="1000"))
+	float FootSizeCM;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", UIMin="0", ClampMax="20", UIMax="20"))
 	float TMPRetourUpwardBoost;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="1", UIMin="1", ClampMax="1000", UIMax="1000"))
+	float TMPDownScaleAppliedForceByJump;
 };

@@ -44,7 +44,10 @@ Aside2d0Character::Aside2d0Character()
 
 	WallrunSpeedToUpwardForceTransitionRatio = 0.5f;
 	LegLength = 100.f;
+	CharacterWeightKG = 80.f;
+	FootSizeCM = 25.f;
 	TMPRetourUpwardBoost = 20.f;
+	TMPDownScaleAppliedForceByJump = 100.f;
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named MyCharacter (to avoid direct content references in C++)
@@ -57,11 +60,12 @@ const FName JumpObjectInterference("JumpObjectInterference");
 
 void Aside2d0Character::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
 {
-	UE_LOG(LogTemp, Warning, TEXT("XXX123"));
 	// set up gameplay key bindings
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &Aside2d0Character::StartJump);
 	PlayerInputComponent->BindAction("Jump", IE_Released, this, &Aside2d0Character::StopJump);
 	PlayerInputComponent->BindAxis("MoveRight", this, &Aside2d0Character::MoveRight);
+	PlayerInputComponent->BindAction("UseHands", IE_Pressed, this, &Aside2d0Character::Grab);
+	PlayerInputComponent->BindAction("UseHands", IE_Released, this, &Aside2d0Character::UnGrab);
 
 	PlayerInputComponent->BindTouch(IE_Pressed, this, &Aside2d0Character::TouchStarted);
 	PlayerInputComponent->BindTouch(IE_Released, this, &Aside2d0Character::TouchStopped);
@@ -80,32 +84,38 @@ void Aside2d0Character::StopJump() {
 	ACharacter::StopJumping();
 }
 
+static bool SweepFromActor(FHitResult& result, const AActor* const a, const FVector Offset, float radius) {
+	FCollisionQueryParams params;
+	params.TraceTag = JumpObjectInterference;
+	params.AddIgnoredActor(a);
+	return a->GetWorld()->SweepSingleByChannel(
+		result, a->GetActorLocation(), a->GetActorLocation() + Offset,
+		FQuat::Identity, ECollisionChannel::ECC_WorldStatic, FCollisionShape::MakeSphere(radius),
+		params
+	);
+}
 void Aside2d0Character::ApplyRetourImpulse(EMovementMode movement) {
 	if (movement != EMovementMode::MOVE_Falling) {
 		return;
 	}
 	auto userDirection = this->LastControlInputVector;
-	auto StartSearch = GetActorLocation();
-	auto EndSearch = GetActorLocation();
-	float behind = -(userDirection.Y / FMath::Abs(userDirection.Y));
-	EndSearch.Y += (behind * LegLength); // search in movement direction
-	float radius = 25.f;
-	FCollisionQueryParams params;
-	params.TraceTag = JumpObjectInterference;
-	params.AddIgnoredActor(this);
-	FHitResult objectInMoveDirection;
-	bool hit = GetWorld()->SweepSingleByChannel(
-		objectInMoveDirection, StartSearch, EndSearch, FQuat::Identity,
-		ECollisionChannel::ECC_WorldStatic, FCollisionShape::MakeSphere(radius),
-		params
-	);
-	if (hit && objectInMoveDirection.bBlockingHit) {
-		auto src = objectInMoveDirection.Location;
+	float behind = -(userDirection.Y / FMath::Abs(userDirection.Y)); // search in movement direction
+	FHitResult obj;
+	bool hit = SweepFromActor(obj, this, FVector(0, behind * LegLength, 0), FootSizeCM);
+	if (hit && obj.bBlockingHit) {
+		auto src = obj.Location;
 		src.Z -= TMPRetourUpwardBoost;
 		float ForceRadius = 200.f;
-		float pushOffSrcForce = GetCharacterMovement()->JumpZVelocity;
+		float pushOffSrcForce = GetCharacterMovement()->JumpZVelocity; // jump-strength
 		DrawDebugSphere(GetWorld(), src, ForceRadius, 16, FColor(255.f, 0.f, 0.f), false, 2.f);
 		this->GetCharacterMovement()->AddRadialImpulse(src, ForceRadius, pushOffSrcForce, ERadialImpulseFalloff::RIF_Linear, true);
+		if (obj.Component->IsSimulatingPhysics()) {
+			auto src2 = GetActorLocation();
+			src2.Z += TMPRetourUpwardBoost; // simmulate force in opposite direction
+			float objectForce = pushOffSrcForce / TMPDownScaleAppliedForceByJump * GetMass();
+			UE_LOG(LogTemp, Warning, TEXT("objectForce(%f) = pushOffSrcForce(%f) / (%f) * GetMass()(%f)"), objectForce, pushOffSrcForce, 1000.f, GetMass());
+			obj.Component->AddRadialImpulse(src2, ForceRadius, objectForce, ERadialImpulseFalloff::RIF_Constant, true);
+		}
 	}
 }
 
@@ -116,29 +126,24 @@ void Aside2d0Character::ApplyWallrunImpulse(EMovementMode movement) {
 		return;
 	}
 	UE_LOG(LogTemp, Warning, TEXT("velocity=%s"), *v.ToString());
-	auto StartSearch = GetActorLocation();
-	auto EndSearch = GetActorLocation();
-	float moveDirectionY = (v.Y / FMath::Abs(v.Y));
-	EndSearch.Y += (moveDirectionY * LegLength); // search in movement direction
-	float radius = 25.f;
-	FCollisionQueryParams params;
-	params.TraceTag = JumpObjectInterference;
-	params.AddIgnoredActor(this);
-	FHitResult objectInMoveDirection;
-	bool hit = GetWorld()->SweepSingleByChannel(
-		objectInMoveDirection, StartSearch, EndSearch, FQuat::Identity,
-		ECollisionChannel::ECC_WorldStatic, FCollisionShape::MakeSphere(radius),
-		params
-	);
-	if (hit && objectInMoveDirection.bBlockingHit) {
+	float moveDirectionY = (v.Y / FMath::Abs(v.Y)); // search in movement direction
+	FHitResult obj;
+	bool hit = SweepFromActor(obj, this, FVector(0, moveDirectionY * LegLength, 0), FootSizeCM);
+	if (hit && obj.bBlockingHit) {
 		//UE_LOG(LogTemp, Warning, TEXT("objectInMoveDir=%s"), *objectInMoveDirection.ToString());
 		auto src = GetActorLocation();
 		src.Z -= 80.f;
 		float ForceRadius = 200.f;
-		float WallrunUpForce = 100.f /* leg strength x wall grip */ + WallrunSpeedToUpwardForceTransitionRatio * FMath::Abs(v.Y);
+		float WallrunUpForce = 100.f /* boost + leg strength x wall grip */ + WallrunSpeedToUpwardForceTransitionRatio * FMath::Abs(v.Y);
 		UE_LOG(LogTemp, Warning, TEXT("WallrunUpForce=%f (= 100.f + %f * %f)"), WallrunUpForce, WallrunSpeedToUpwardForceTransitionRatio, FMath::Abs(v.Y));
 		DrawDebugSphere(GetWorld(), src, ForceRadius, 16, FColor(255.f, 0.f, 0.f), false, 2.f);
 		this->GetCharacterMovement()->AddRadialImpulse(src, ForceRadius, WallrunUpForce, ERadialImpulseFalloff::RIF_Constant, true);
+		if (obj.Component->IsSimulatingPhysics()) {
+			auto src2 = GetActorLocation();
+			src2.Z += 80.f; // simmulate force in opposite direction
+			float objectForce = WallrunUpForce / TMPDownScaleAppliedForceByJump * GetMass();
+			obj.Component->AddRadialImpulse(src2, ForceRadius, objectForce, ERadialImpulseFalloff::RIF_Constant, true);
+		}
 	}
 }
 
@@ -159,3 +164,19 @@ void Aside2d0Character::TouchStopped(const ETouchIndex::Type FingerIndex, const 
 	StopJumping();
 }
 
+void Aside2d0Character::Grab() {
+	UE_LOG(LogTemp, Warning, TEXT("pressed 'e'"));
+	const auto& m = GetCharacterMovement();
+	m->MovementMode = EMovementMode::MOVE_Custom;
+}
+void Aside2d0Character::UnGrab() {
+	UE_LOG(LogTemp, Warning, TEXT("released 'e'"));
+	const auto& m = GetCharacterMovement();
+	m->MovementMode = EMovementMode::MOVE_Falling;
+}
+
+float Aside2d0Character::GetMass() {
+	// would like to use GetCapsuleComponent()->GetMass(), but that needs
+	// physics simmulation on that capsule enabled
+	return CharacterWeightKG;
+}
